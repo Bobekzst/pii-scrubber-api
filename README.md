@@ -69,27 +69,3 @@ Response:
 }
 ```
 
----
-
-## Deploy on Railway (free — 500h/month)
-
-1. Utwórz konto na [railway.app](https://railway.app)
-2. **New Project → Deploy from GitHub repo**
-3. Wgraj ten folder na GitHub (wystarczy publiczne repo)
-4. Railway automatycznie wykryje `Dockerfile` i zbuduje obraz
-5. Po deployu dostaniesz URL w stylu `https://pii-scrubber-api-production.up.railway.app`
-6. Sprawdź: `GET /health` → `{"status": "ok"}`
-
-> Railway free tier: 512 MB RAM, 1 vCPU — w zupełności wystarczy dla tego API.
-
----
-
-## Deploy on Render (alternatywa)
-
-1. Konto na [render.com](https://render.com)
-2. **New → Web Service → Connect repo**
-3. Build command: `pip install -r requirements.txt`
-4. Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-5. Instancja: **Free** (usypia po 15 min bezczynności — dla startu OK)
-
-
