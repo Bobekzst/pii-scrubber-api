@@ -102,3 +102,11 @@ class BatchScrubResponse(BaseModel):
     results: List[BatchScrubResult]
     total_texts: int
     total_entities_found: int
+
+
+class PDFScrubResponse(BaseModel):
+    scrubbed_text: str
+    detected_entities: List[DetectedEntity]
+    entities_count: int
+    pages: int
+    original_chars: int
