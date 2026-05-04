@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -6,11 +6,14 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import time
 import os
+import io
+import pdfplumber
 
 from app.models import (
     ScrubRequest, ScrubResponse,
     DetectRequest, DetectResponse,
     BatchScrubRequest, BatchScrubResponse, BatchScrubResult,
+    PDFScrubResponse,
     EntityType,
 )
 from app.scrubber import scrub_text, detect_entities
@@ -146,6 +149,68 @@ async def scrub_batch(request: Request, body: BatchScrubRequest):
         results=results,
         total_texts=len(body.items),
         total_entities_found=total_entities,
+    )
+
+
+# ─── /scrub/pdf ────────────────────────────────────────────────────────────────
+@app.post(
+    "/scrub/pdf",
+    response_model=PDFScrubResponse,
+    tags=["PII"],
+    summary="Scrub PII from a PDF file",
+    description=(
+        "Upload a PDF file and get back the full extracted text with all PII removed. "
+        "Supports multi-page PDFs up to **10 MB**. "
+        "Scanned PDFs (image-only) are not supported — the PDF must contain selectable text."
+    ),
+)
+@limiter.limit("20/minute")
+async def scrub_pdf(
+    request: Request,
+    file: UploadFile = File(..., description="PDF file to scrub"),
+    replacement_pattern: str = Form(default="[{type}]", description="Replacement pattern, e.g. [{{type}}] → [EMAIL]"),
+    entities: str = Form(default="", description="Comma-separated entity types to scrub. Leave empty for all."),
+):
+    # Validate file type
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted.")
+
+    contents = await file.read()
+
+    # 10 MB limit
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10 MB.")
+
+    # Extract text from PDF
+    try:
+        with pdfplumber.open(io.BytesIO(contents)) as pdf:
+            pages = len(pdf.pages)
+            full_text = "\n\n".join(
+                page.extract_text() or "" for page in pdf.pages
+            ).strip()
+    except Exception:
+        raise HTTPException(status_code=422, detail="Could not parse PDF. Make sure it contains selectable text.")
+
+    if not full_text:
+        raise HTTPException(status_code=422, detail="No text found in PDF. Scanned image PDFs are not supported.")
+
+    # Parse entity filter
+    entity_set = None
+    if entities.strip():
+        try:
+            entity_set = {EntityType(e.strip().upper()) for e in entities.split(",") if e.strip()}
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid entity type: {e}")
+
+    # Scrub
+    scrubbed, detected = scrub_text(full_text, entity_set, replacement_pattern)
+
+    return PDFScrubResponse(
+        scrubbed_text=scrubbed,
+        detected_entities=detected,
+        entities_count=len(detected),
+        pages=pages,
+        original_chars=len(full_text),
     )
 
 
