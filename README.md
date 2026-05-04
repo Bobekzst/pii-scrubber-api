@@ -68,4 +68,27 @@ Response:
   "chars_removed": -12
 }
 ```
+## PDF Support
 
+Upload a PDF file and get back the extracted text with all PII removed.
+
+**Endpoint:** `POST /scrub/pdf`
+
+**Request:** `multipart/form-data`
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| file | PDF file | ✓ | PDF with selectable text (max 10 MB) |
+| replacement_pattern | string | | Default: `[{type}]` |
+| entities | string | | Comma-separated types, e.g. `EMAIL,PHONE`. Default: all |
+
+**Limitations:**
+- Max file size: 10 MB
+- Scanned/image PDFs are not supported (must contain selectable text)
+
+**Example (curl):**
+```bash
+curl -X POST https://your-api-url/scrub/pdf \
+  -F "file=@document.pdf" \
+  -F "replacement_pattern=[{type}]"
+```
